@@ -1,0 +1,1489 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Worldwide Energy Resources</title>
+	<script src="http://d3js.org/d3.v3.js"></script>
+	<script src="http://d3js.org/d3.geo.projection.v0.min.js"></script>
+	<script src="//d3js.org/topojson.v1.min.js"></script>
+	<style>
+		text 
+		{
+            font-family: Arial;
+            font-size: 20px;
+        }
+		h1
+		{
+			color: navy;
+		}
+		body
+		{
+			background-color: aliceblue;
+            overflow: hidden;
+        }
+		.country 
+		{
+			fill: #b7b7b7;
+			stroke: #fff;
+		}
+	</style>
+</head>
+
+<body>
+
+	<h1 align = "center">Worldwide Energy Resources</h1>
+	<div style = "width:98%; height: 89%; ">
+		<div style =" width: 49%;display:inline-block; ">
+			<div>
+				<select id = "country1" style = "display:inline;background-color: cornflowerblue;padding: 1%;color:white;font-size: 15px; margin-left: 10%; margin-top: 10%" ></select>
+				<form action ="" style = "display:inline;font-size: 25px;margin-left: 5%">
+					<input type ="checkbox" id = "compareCountry" name="country" value="compare">Compare with
+				</form>	
+				<select id = "country2" style = "display:inline;background-color: darkorange; padding: 1%;color:white; font-size: 15px;margin-left: 5% "></select>
+			</div>
+			
+			<svg id="geovisualization" height="500" width="960" style="width: 900px; height: 450px; margin-left: 3%"> </svg>
+	
+			<form name="form" id="visuStyle"  style="font-size: 25px;margin-left: 40%; margin-top: 5%">
+				<input id="Radar" type="radio" name="Graph" value="RadarChart" checked style=""> Radar Chart<br>
+				<input id="Bar" type="radio" name="Graph" value="BarGraph"  style=""> Bar Graph<br>
+				<input id="Area" type="radio" name="Graph" value="AreaGraph" style=""> Area Graph<br>
+				<input id="Line" type="radio" name="Graph" value="LineGraph" style=""> Line Graph<br>
+			</form>
+		</div>
+		<div style=" width: 49%;display:inline-block; ">
+			<select id="selectData" style="padding:10px; font-size: 15px;background-color:snow;margin-left: 40%;"></select>
+			<svg id="mainvisualization" width="1000" height="700" style="">
+				<text id='textlabel' x='180' y='690'></text>
+			</svg>
+		</div>
+	</div>
+	
+	<script>
+	
+/*-------------------- Geo Visualization -------------------------*/
+var mapProjection = d3.geo.equirectangular();
+
+var path = d3.geo.path()
+    .projection(mapProjection);
+
+var svg = d3.select("#geovisualization"); 
+
+d3.json("worldmap.json", function(error, world) 
+{
+    var countries = topojson.feature(world, world.objects.countries).features,
+        neighbors = topojson.neighbors(world.objects.countries.geometries);
+
+    svg.selectAll(".country")
+        .data(countries)
+        .enter()
+        .insert("path", ".graticule")
+        .attr("class", "country")
+        .attr("d", path)
+
+        .on("click", function() 
+		{
+            if (document.getElementById("compareCountry").checked == false) 
+			{
+                placeName = this.attributes[4].textContent;
+                selection = document.getElementById('selectData');
+                energyResource = selection.options[selection.selectedIndex].value;
+                selection = document.getElementById('country1');
+                selection.value = placeName;
+                visualizations(placeName, energyResource, comparedPlaceName);
+            } else 
+			{
+                comparedPlaceName = this.attributes[4].textContent;
+                selection = document.getElementById('selectData');
+                energyResource = selection.options[selection.selectedIndex].value;
+                selection = document.getElementById('country2');
+                selection.value = comparedPlaceName;
+                visualizations(placeName, energyResource, comparedPlaceName);
+            }
+        });
+
+    var energyResource,
+        selection,
+        places = {},
+        placesList = [],
+        placeName = 'North America';
+    comparedPlaceName = 'North America';
+    visualizationType = "RadarChart";
+
+    /*------------------ Get the data ------------------*/
+
+    /* Petroleum Production */
+
+    d3.csv("petroleum_production.csv", function(error, dataset) 
+	{
+
+        if (error) throw error;
+
+        var rows, records, place;
+        for (rows = 0; rows < dataset.length; rows++) /* For all rows in the dataset */ 
+		{
+            records = dataset[rows];
+            if (records.Locality === "World")
+                continue;
+            place = 
+			{
+                name: records.Locality,
+                primaryEnergyProduction: [],
+                primaryEnergyConsumption: [],
+                electricityGeneration: [],
+                electricityConsumption: [],
+                petroleumProduction: [],
+                petroleumConsumption: [],
+                biofuelProduction: [],
+                biofuelConsumption: [],
+                coalProduction: [],
+                coalConsumption: []
+            }
+
+            var yr, val;
+            for (yr = 1980; yr < 2013; yr++) /* For all the years in the dataset */ 
+			{
+                val = records[yr];
+
+                /* For missing data */
+                if (val == '--') 
+				{
+                    val = 0;
+                } else if (val == 'NA') 
+				{
+                    val = 0;
+                } else if (val == undefined) 
+				{
+                    val = 0;
+                }
+                place.petroleumProduction.push(val);
+            }
+
+            places[place.name] = place;
+            placesList.push(place.name);
+        }
+
+        /* Primary Energy Consumption */
+
+        d3.csv("primary_energy_consumption.csv", function(error, dataset) 
+		{
+
+            if (error) throw error;
+
+            var rows, records;
+            for (rows = 0; rows < dataset.length; rows++) /* For all rows in the dataset */ 
+			{
+				//window.alert(rows)
+                records = dataset[rows];
+                if (records.Locality === "World")
+                    continue;
+                var yr, val;
+                for (yr = 1980; yr < 2013; yr++) /* For all the years in the dataset */ 
+				{
+                    val = records[yr];
+
+                    /* For missing data */
+                    if (val == '--') 
+					{
+                        val = 0;
+                    } else if (val == 'NA') 
+					{
+                        val = 0;
+                    } else if (val == undefined) 
+					{
+                        val = 0;
+                    }
+                    places[records.Locality].primaryEnergyConsumption.push(val);
+                }
+            }
+
+            /* Electricity Generation */
+
+            d3.csv("electricity_generation.csv", function(error, dataset) 
+			{
+
+                if (error) throw error;
+
+                var rows, records;
+
+                for (rows = 0; rows < dataset.length; rows++) /* For all rows in the dataset */ 
+				{
+                    records = dataset[rows];
+                    if (records.Locality === "World")
+                        continue;
+                    var yr, val;
+                    for (yr = 1980; yr < 2013; yr++) /* For all the years in the dataset */ 
+					{
+                        val = records[yr];
+
+                        /* For missing data */
+                        if (val == '--') 
+						{
+                            val = 0;
+                        } else if (val == 'NA') 
+						{
+                            val = 0;
+                        } else if (val == undefined)
+						{
+                            val = 0;
+                        }
+                        places[records.Locality].electricityGeneration.push(val);
+                    }
+                }
+
+                /* Electricity Consumption */
+
+                d3.csv("electricity_consumption.csv", function(error, dataset) 
+				{
+
+                    if (error) throw error;
+
+                    var rows, records;
+                    for (rows = 0; rows < dataset.length; rows++) /* For all rows in the dataset */ 
+					{
+                        records = dataset[rows];
+                        if (records.Locality === "World")
+                            continue;
+
+                        var yr, val;
+                        for (yr = 1980; yr < 2013; yr++) /* For all the years in the dataset */ 
+						{
+                            val = records[yr];
+
+                            /* For missing data */
+                            if (val == '--') 
+							{
+                                val = 0;
+                            } else if (val == 'NA') 
+							{
+                                val = 0;
+                            } else if (val == undefined) 
+							{
+                                val = 0;
+                            }
+                            places[records.Locality].electricityConsumption.push(val);
+                        }
+                    }
+
+                    /* Primary Energy Production */
+
+                    d3.csv("primary_energy_production.csv", function(error, dataset) 
+					{
+
+                        if (error) throw error;
+
+                        var rows, records;
+                        for (rows = 0; rows < dataset.length; rows++) /* For all rows in the dataset */ 
+						{
+                            records = dataset[rows];
+                            if (records.Locality === "World")
+                                continue;
+
+                            var yr, val;
+                            for (yr = 1980; yr < 2013; yr++) /* For all the years in the dataset */
+							{
+                                val = records[yr];
+
+                                /* For missing data */
+                                if (val == '--') 
+								{
+                                    val = 0;
+                                } else if (val == 'NA') 
+								{
+                                    val = 0;
+                                } else if (val == undefined) 
+								{
+                                    val = 0;
+                                }
+                                places[records.Locality].primaryEnergyProduction.push(val);
+                            }
+                        }
+
+                        /* Petroleum Consumption */
+
+                        d3.csv("petroleum_consumption.csv", function(error, dataset) 
+						{
+
+                            if (error) throw error;
+
+                            var rows, records;
+                            for (rows = 0; rows < dataset.length; rows++) /* For all rows in the dataset */ 
+							{
+                                records = dataset[rows];
+                                if (records.Locality === "World")
+                                    continue;
+
+                                var yr, val;
+                                for (yr = 1980; yr < 2013; yr++) /* For all the years in the dataset */ 
+								{
+                                    val = records[yr];
+
+                                    /* For missing data */
+                                    if (val == '--') 
+									{
+                                        val = 0;
+                                    } else if (val == 'NA') 
+									{
+                                        val = 0;
+                                    } else if (val == undefined) 
+									{
+                                        val = 0;
+                                    }
+                                    places[records.Locality].petroleumConsumption.push(val);
+                                }
+                            }
+
+                            /* Biofuel Production */
+
+                            d3.csv("biofuel_production.csv", function(error, dataset)
+							{
+
+                                if (error) throw error;
+
+                                var rows, records;
+                                for (rows = 0; rows < dataset.length; rows++) /* For all rows in the dataset */
+								{
+                                    records = dataset[rows];
+                                    if (records.Locality === "World")
+                                        continue;
+
+                                    var yr, val;
+                                    for (yr = 1980; yr < 2013; yr++) /* For all the years in the dataset */ 
+									{
+                                        val = records[yr];
+
+                                        /* For missing data */
+                                        if (val == '--') 
+										{
+                                            val = 0;
+                                        } else if (val == 'NA') 
+										{
+                                            val = 0;
+                                        } else if (val == undefined) 
+										{
+                                            val = 0;
+                                        }
+                                        places[records.Locality].biofuelProduction.push(val);
+                                    }
+                                }
+
+                                /* Biofuel Consumption */
+
+                                d3.csv("biofuel_consumption.csv", function(error, dataset) 
+								{
+
+                                    if (error) throw error;
+
+                                    var rows, records;
+                                    for (rows = 0; rows < dataset.length; rows++) /* For all rows in the dataset */ 
+									{
+                                        records = dataset[rows];
+                                        if (records.Locality === "World")
+                                            continue;
+
+                                        var yr, val;
+                                        for (yr = 1980; yr < 2013; yr++) /* For all the years in the dataset */ 
+										{
+                                            val = records[yr];
+
+                                            /* For missing data */
+                                            if (val == '--') 
+											{
+                                                val = 0;
+                                            } else if (val == 'NA') 
+											{
+                                                val = 0;
+                                            } else if (val == undefined)
+											{
+                                                val = 0;
+                                            }
+                                            places[records.Locality].biofuelConsumption.push(val);
+                                        }
+                                    }
+
+                                    /* Coal Production */
+
+                                    d3.csv("coal_production.csv", function(error, dataset) 
+									{
+
+                                        if (error) throw error;
+
+                                        var rows, records;
+                                        for (rows = 0; rows < dataset.length; rows++) /* For all rows in the dataset */
+										{
+                                            records = dataset[rows];
+                                            if (records.Locality === "World")
+                                                continue;
+
+                                            var yr, val;
+                                            for (yr = 1980; yr < 2013; yr++) /* For all the years in the dataset */ 
+											{
+                                                val = records[yr];
+
+                                                /* For missing data */
+                                                if (val == '--') 
+												{
+                                                    val = 0;
+                                                } else if (val == 'NA') 
+												{
+                                                    val = 0;
+                                                } else if (val == undefined) 
+												{
+                                                    val = 0;
+                                                }
+                                                places[records.Locality].coalProduction.push(val);
+                                            }
+                                        }
+
+                                        /* Coal Consumption */
+
+                                        d3.csv("coal_consumption.csv", function(error, dataset) 
+										{
+
+                                            if (error) throw error;
+
+                                            var rows, records;
+                                            for (rows = 0; rows < dataset.length; rows++) /* For all rows in the dataset */ 
+											{
+                                                records = dataset[rows];
+                                                if (records.Locality === "World")
+                                                    continue;
+
+                                                var yr, val;
+                                                for (yr = 1980; yr < 2013; yr++) /* For all the years in the dataset */ 
+												{
+                                                    val = records[yr];
+
+                                                    /* For missing data */
+                                                    if (val == '--') 
+													{
+                                                        val = 0;
+                                                    } else if (val == 'NA')
+													{
+                                                        val = 0;
+                                                    } else if (val == undefined) 
+													{
+                                                        val = 0;
+                                                    }
+                                                    places[records.Locality].coalConsumption.push(val);
+                                                }
+                                            }
+
+                                            /*---------------------- Populate Energy Resources -----------------------*/
+
+                                            d3.select('#selectData').selectAll('option')
+                                                .data([
+                                                    'Primary Energy Production',
+                                                    'Primary Energy Consumption',
+                                                    'Electricity Generation',
+                                                    'Electricity Consumption',
+                                                    'Petroleum Production',
+                                                    'Petroleum Consumption',
+                                                    'Biofuel Production',
+                                                    'Biofuel Consumption',
+                                                    'Coal Production',
+                                                    'Coal Consumption',
+                                                ])
+                                                .enter()
+                                                .append('option')
+                                                .html(function(p) 
+												{
+                                                    return p;
+                                                });
+
+                                            /*------------------- Select Energy Resource --------------------*/
+
+                                            d3.select("#selectData")
+                                                .on('change', function() 
+												{
+                                                    selection = document.getElementById('selectData');
+                                                    energyResource = selection.options[selection.selectedIndex].value;
+
+                                                    visualizations(placeName, energyResource, comparedPlaceName);
+                                                });
+
+                                            /*------------------ Populate Countries  -----------------*/
+
+                                            d3.select('#country1').selectAll('option')
+                                                .data(placesList)
+                                                .enter()
+                                                .append('option')
+                                                .html(function(p) 
+												{
+                                                    return p;
+                                                })
+
+                                            d3.select('#country2').selectAll('option')
+                                                .data(placesList)
+                                                .enter()
+                                                .append('option')
+                                                .html(function(p) 
+												{
+                                                    return p;
+                                                })
+
+                                            /*------------------- Select Countries ------------------*/
+
+                                            d3.select("#country1")
+                                                .on('change', function() 
+												{
+                                                    selection = document.getElementById('country1');
+                                                    placeName = selection.options[selection.selectedIndex].value;
+
+                                                    selection = document.getElementById('selectData');
+                                                    energyResource = selection.options[selection.selectedIndex].value;
+
+                                                    visualizations(placeName, energyResource, comparedPlaceName);
+                                                });
+
+                                            d3.select("#country2")
+                                                .on('change', function() 
+												{
+                                                    selection = document.getElementById('selectData');
+                                                    energyResource = selection.options[selection.selectedIndex].value;
+
+                                                    selection = document.getElementById('country2');
+                                                    comparedPlaceName = selection.options[selection.selectedIndex].value;
+
+                                                    visualizations(placeName, energyResource, comparedPlaceName);
+                                                });
+
+
+                                            /*---------------------  For every selection ---------------------*/
+
+                                            var reselect = document.form.Graph,
+                                                previous = null;
+                                            for (var i = 0; i < reselect.length; i++) 
+											{
+                                                reselect[i].onclick = function() 
+												{
+                                                    if (this != previous) 
+													{
+                                                        previous = this;
+                                                        visualizationType = this.value;
+                                                        selection = document.getElementById('country1');
+                                                        placeName = selection.options[selection.selectedIndex].value;
+                                                        selection = document.getElementById('selectData');
+                                                        energyResource = selection.options[selection.selectedIndex].value;
+                                                        visualizations(placeName, energyResource, comparedPlaceName);
+                                                    }
+                                                }
+                                            }
+
+                                            document.getElementById("compareCountry").onchange = function() 
+											{
+                                                if (document.getElementById("compareCountry").checked != false) 
+												{
+                                                    selection = document.getElementById('country2');
+                                                    comparedPlaceName = selection.options[selection.selectedIndex].value;
+                                                    selection = document.getElementById('selectData');
+                                                    energyResource = selection.options[selection.selectedIndex].value;
+                                                    visualizations(placeName, energyResource, comparedPlaceName);
+                                                } else
+                                                    visualizations(placeName, energyResource, comparedPlaceName);
+                                            }
+
+                                            /*-------------------- Get actual data --------------------*/
+
+                                            function readData(placeName, resourceSelected) 
+											{
+                                                var actualData;
+
+                                                if (resourceSelected == 'Primary Energy Production')
+                                                    actualData = places[placeName].primaryEnergyProduction;
+
+                                                else if (resourceSelected == 'Primary Energy Consumption')
+                                                    actualData = places[placeName].primaryEnergyConsumption;
+
+                                                else if (resourceSelected == 'Electricity Generation')
+                                                    actualData = places[placeName].electricityGeneration;
+
+                                                else if (resourceSelected == 'Electricity Consumption')
+                                                    actualData = places[placeName].electricityConsumption;
+
+                                                else if (resourceSelected == 'Petroleum Production')
+                                                    actualData = places[placeName].petroleumProduction;
+
+                                                else if (resourceSelected == 'Petroleum Consumption')
+                                                    actualData = places[placeName].petroleumConsumption;
+
+                                                else if (resourceSelected == 'Biofuel Production')
+                                                    actualData = places[placeName].biofuelProduction;
+
+                                                else if (resourceSelected == 'Biofuel Consumption')
+                                                    actualData = places[placeName].biofuelConsumption;
+
+                                                else if (resourceSelected == 'Coal Production')
+                                                    actualData = places[placeName].coalProduction;
+
+                                                else if (resourceSelected == 'Coal Consumption')
+                                                    actualData = places[placeName].coalConsumption;
+
+                                                return actualData;
+                                            }
+
+                                            /*----------------- Function for different types of visualizations ------------------*/
+
+                                            visualizations('North America', 'Primary Energy Production', 'United States');
+
+                                            function visualizations(placeName, resourceSelected, comparedPlaceName) 
+											{
+                                                var actualData1 = readData(placeName, resourceSelected);
+
+                                                for (var i = 0; i < actualData1.length; i++)
+                                                    actualData1[i] = +actualData1[i];
+
+												/* Radar Chart */
+
+                                                if (visualizationType == "RadarChart") 
+												{
+                                                    var data = [];
+                                                    d3.select("#mainvisualization").selectAll('g').remove();
+
+                                                    var RadarChart = 
+													{
+                                                        draw: function(id, d, options) 
+														{
+                                                            var config = 
+															{
+                                                                r: 5,
+                                                                w: 600,
+                                                                h: 600,
+                                                                scaling: 1,
+                                                                scalingLegend: .85,
+                                                                states: 3,
+                                                                value: 0,
+                                                                rad: 2 * Math.PI,
+                                                                opacity: 0.5,
+                                                                right: 5,
+                                                                changeX: 80,
+                                                                changeY: 30,
+                                                                widthX: 100,
+                                                                widthY: 100,
+                                                                color: d3.scale.category10()
+                                                            };
+
+                                                            if ('undefined' !== typeof options) 
+															{
+
+                                                                for (var i in options) 
+																{
+                                                                    if ('undefined' !== typeof options[i]) 
+																	{
+                                                                        config[i] = options[i];
+                                                                    }
+                                                                }
+                                                            }
+
+                                                            for (var i in places) 
+															{
+                                                                var a = readData(i, resourceSelected);
+                                                                for (var j = 0; j < a.length; j++) 
+																{
+                                                                    data.push(a[j]);
+                                                                }
+                                                            }
+
+                                                            for (var i = 0; i < data.length; i++)
+                                                                data[i] = +data[i];
+
+                                                            config.value = d3.max(data);
+
+                                                            var d = [
+                                                                /*[
+                                                                {axis:"1980",value:20},
+                                                                {axis:"1981",value:10},
+                                                                {axis:"1982",value:30},
+                                                                {axis:"1983",value:40},
+                                                                ]*/
+                                                            ];
+
+                                                            if (document.getElementById("compareCountry").checked != true) 
+															{
+                                                                d3.select("#textlabel")
+                                                                    .html(placeName + " : " + resourceSelected);
+
+                                                                var years = [];
+                                                                for (var j = 0; j < 33; j++) 
+																{
+
+                                                                    years.push({
+                                                                        axis: 1980 + j + "",
+                                                                        value: actualData1[j]
+                                                                    });
+                                                                }
+                                                                d.push(years);
+                                                            } 
+															else 
+															{
+                                                                var actualData2 = readData(comparedPlaceName, resourceSelected);
+
+                                                                d3.select("#textlabel")
+                                                                    .html(placeName + " & " + comparedPlaceName + " : " + resourceSelected);
+
+                                                                var years = [];
+                                                                for (var j = 0; j < 33; j++) 
+																{
+                                                                    years.push({
+                                                                        axis: 1980 + j + "",
+                                                                        value: actualData1[j]
+                                                                    });
+                                                                }
+                                                                d.push(years);
+                                                                var years = [];
+                                                                for (var j = 0; j < 33; j++) 
+																{
+                                                                    years.push({
+                                                                        axis: 1980 + j + "",
+                                                                        value: actualData2[j]
+                                                                    });
+                                                                }
+                                                                d.push(years);
+                                                            }
+
+                                                            var allYears = (d[0].map(function(i, j) 
+															{
+                                                                return i.axis
+                                                            }));
+                                                            var totalData = allYears.length;
+                                                            var r = config.scaling * Math.min(config.w / 2, config.h / 2);
+                                                            var Format = d3.format('%');
+                                                            var g = d3.select("#mainvisualization").append("g").attr("transform", "translate(" + config.changeX + "," + config.changeY + ")");
+                                                            var tip;
+
+                                                            
+                                                            for (var j = 0; j < config.states - 1; j++) 
+															{
+                                                                var statescaling = config.scaling * r * ((j + 1) / config.states);
+                                                                g.selectAll(".states")
+                                                                    .data(allYears)
+                                                                    .enter()
+                                                                    .append("svg:line")
+                                                                    .attr("x1", function(d, i) 
+																	{
+                                                                        return statescaling * (1 - config.scaling * Math.sin(i * config.rad / totalData));
+                                                                    })
+                                                                    .attr("y1", function(d, i) 
+																	{
+                                                                        return statescaling * (1 - config.scaling * Math.cos(i * config.rad / totalData));
+                                                                    })
+                                                                    .attr("x2", function(d, i) 
+																	{
+                                                                        return statescaling * (1 - config.scaling * Math.sin((i + 1) * config.rad / totalData));
+                                                                    })
+                                                                    .attr("y2", function(d, i) 
+																	{
+                                                                        return statescaling * (1 - config.scaling * Math.cos((i + 1) * config.rad / totalData));
+                                                                    })
+                                                                    .attr("class", "line")
+                                                                    .style("stroke", "grey")
+                                                                    .style("stroke-opacity", "0.75")
+                                                                    .style("stroke-width", "0.3px")
+                                                                    .attr("transform", "translate(" + (config.w / 2 - statescaling) + ", " + (config.h / 2 - statescaling) + ")");
+                                                            }
+
+                                                            
+                                                            for (var j = 0; j < config.states; j++) 
+															{
+                                                                var statescaling = config.scaling * r * ((j + 1) / config.states);
+                                                                g.selectAll(".states")
+                                                                    .data([1]) 
+                                                                    .enter()
+                                                                    .append("svg:text")
+                                                                    .attr("x", function(d) 
+																	{
+                                                                        return statescaling * (1 - config.scaling * Math.sin(0));
+                                                                    })
+                                                                    .attr("y", function(d) 
+																	{
+                                                                        return statescaling * (1 - config.scaling * Math.cos(0));
+                                                                    })
+                                                                    .attr("class", "legend")
+                                                                    .style("font-family", "sans-serif")
+                                                                    .style("font-size", "10px")
+                                                                    .attr("transform", "translate(" + (config.w / 2 - statescaling + config.right) + ", " + (config.h / 2 - statescaling) + ")")
+                                                                    .attr("fill", "#737373")
+                                                                    .text(Format((j + 1) * config.value / config.states));
+                                                            }
+
+                                                            srs = 0;
+
+                                                            var axis = g.selectAll(".axis")
+                                                                .data(allYears)
+                                                                .enter()
+                                                                .append("g")
+                                                                .attr("class", "axis");
+
+                                                            axis.append("line")
+                                                                .attr("x1", config.w / 2)
+                                                                .attr("y1", config.h / 2)
+                                                                .attr("x2", function(d, i) 
+																{
+                                                                    return config.w / 2 * (1 - config.scaling * Math.sin(i * config.rad / totalData));
+                                                                })
+                                                                .attr("y2", function(d, i) 
+																{
+                                                                    return config.h / 2 * (1 - config.scaling * Math.cos(i * config.rad / totalData));
+                                                                })
+                                                                .attr("class", "line")
+                                                                .style("stroke", "grey")
+                                                                .style("stroke-width", "1px");
+
+                                                            axis.append("text")
+                                                                .attr("class", "legend")
+                                                                .text(function(d) 
+																{
+                                                                    return d
+                                                                })
+                                                                .style("font-family", "sans-serif")
+                                                                .style("font-size", "11px")
+                                                                .attr("text-anchor", "middle")
+                                                                .attr("dy", "1.5em")
+                                                                .attr("transform", function(d, i) 
+																{
+                                                                    return "translate(0, -10)"
+                                                                })
+                                                                .attr("x", function(d, i) 
+																{
+                                                                    return config.w / 2 * (1 - config.scalingLegend * Math.sin(i * config.rad / totalData)) - 60 * Math.sin(i * config.rad / totalData);
+                                                                })
+                                                                .attr("y", function(d, i) 
+																{
+                                                                    return config.h / 2 * (1 - Math.cos(i * config.rad / totalData)) - 20 * Math.cos(i * config.rad / totalData);
+                                                                });
+
+
+                                                            d.forEach(function(y, x) 
+															{
+                                                                dataValues = [];
+                                                                g.selectAll(".nodes")
+                                                                    .data(y, function(j, i) 
+																	{
+                                                                        dataValues.push([
+                                                                            config.w / 2 * (1 - (parseFloat(Math.max(j.value, 0)) / config.value) * config.scaling * Math.sin(i * config.rad / totalData)),
+                                                                            config.h / 2 * (1 - (parseFloat(Math.max(j.value, 0)) / config.value) * config.scaling * Math.cos(i * config.rad / totalData))
+                                                                        ]);
+                                                                    });
+                                                                dataValues.push(dataValues[0]);
+                                                                g.selectAll(".area")
+                                                                    .data([dataValues])
+                                                                    .enter()
+                                                                    .append("polygon")
+                                                                    .attr("class", "radar-chart-serie" + srs)
+                                                                    .style("stroke-width", "2px")
+                                                                    .style("stroke", config.color(srs))
+                                                                    .attr("points", function(d) {
+                                                                        var str = "";
+                                                                        for (var pti = 0; pti < d.length; pti++) 
+																		{
+                                                                            str = str + d[pti][0] + "," + d[pti][1] + " ";
+                                                                        }
+                                                                        return str;
+                                                                    })
+                                                                    .style("fill", function(j, i) 
+																	{
+                                                                        return config.color(srs)
+                                                                    })
+                                                                    .style("fill-opacity", config.opacity)
+                                                                    .on('mouseover', function(d) 
+																	{
+                                                                        z = "polygon." + d3.select(this).attr("class");
+                                                                        g.selectAll("polygon")
+                                                                            .transition(200)
+                                                                            .style("fill-opacity", 0.1);
+                                                                        g.selectAll(z)
+                                                                            .transition(200)
+                                                                            .style("fill-opacity", .7);
+                                                                    })
+                                                                    .on('mouseout', function() 
+																	{
+                                                                        g.selectAll("polygon")
+                                                                            .transition(200)
+                                                                            .style("fill-opacity", config.opacity);
+                                                                    });
+                                                                srs++;
+                                                            });
+
+                                                            srs = 0;
+
+                                                            d.forEach(function(y, x) 
+															{
+                                                                g.selectAll(".nodes")
+                                                                    .data(y).enter()
+                                                                    .append("svg:circle")
+                                                                    .attr("class", "radar-chart-serie" + srs)
+                                                                    .attr('r', config.r)
+                                                                    .attr("alt", function(j) 
+																	{
+                                                                        return Math.max(j.value, 0)
+                                                                    })
+                                                                    .attr("cx", function(j, i) 
+																	{
+                                                                        dataValues.push([
+                                                                            config.w / 2 * (1 - (parseFloat(Math.max(j.value, 0)) / config.value) * config.scaling * Math.sin(i * config.rad / totalData)),
+                                                                            config.h / 2 * (1 - (parseFloat(Math.max(j.value, 0)) / config.value) * config.scaling * Math.cos(i * config.rad / totalData))
+                                                                        ]);
+                                                                        return config.w / 2 * (1 - (Math.max(j.value, 0) / config.value) * config.scaling * Math.sin(i * config.rad / totalData));
+                                                                    })
+                                                                    .attr("cy", function(j, i) 
+																	{
+                                                                        return config.h / 2 * (1 - (Math.max(j.value, 0) / config.value) * config.scaling * Math.cos(i * config.rad / totalData));
+                                                                    })
+                                                                    .attr("data-id", function(j) 
+																	{
+                                                                        return j.axis
+                                                                    })
+                                                                    .style("fill", config.color(srs)).style("fill-opacity", .9)
+                                                                    .on('mouseover', function(d) 
+																	{
+                                                                        newX = parseFloat(d3.select(this).attr('cx')) - 10;
+                                                                        newY = parseFloat(d3.select(this).attr('cy')) - 5;
+
+                                                                        tip.attr('x', newX)
+                                                                            .attr('y', newY)
+                                                                            .text(Format(d.value))
+                                                                            .transition(200)
+                                                                            .style('opacity', 1);
+
+                                                                        z = "polygon." + d3.select(this).attr("class");
+                                                                        g.selectAll("polygon")
+                                                                            .transition(200)
+                                                                            .style("fill-opacity", 0.1);
+                                                                        g.selectAll(z)
+                                                                            .transition(200)
+                                                                            .style("fill-opacity", .7);
+                                                                    })
+                                                                    .on('mouseout', function() 
+																	{
+                                                                        tip.transition(200)
+                                                                            .style('opacity', 0);
+                                                                        g.selectAll("polygon")
+                                                                            .transition(200)
+                                                                            .style("fill-opacity", config.opacity);
+                                                                    })
+                                                                    .append("svg:title")
+                                                                    .text(function(j) 
+																	{
+                                                                        return Math.max(j.value, 0)
+                                                                    });
+
+                                                                srs++;
+                                                            });
+
+                                                            tip = g.append('text')
+                                                                .style('opacity', 0)
+                                                                .style('font-family', 'sans-serif')
+                                                                .style('font-size', '13px');
+                                                        }
+                                                    }
+                                                    RadarChart.draw();
+                                                }	
+													
+                                                /* Grouped Bar Graph */
+
+                                                if (visualizationType == "BarGraph") 
+												{
+                                                    d3.select("#mainvisualization").selectAll('g').remove();
+
+                                                    var maxValue = d3.max(actualData1);
+
+                                                    var maxWidth = 891,
+                                                        maxHeight = 450,
+                                                        rectWidth = 27;
+
+                                                    var yAxis = d3.scale.linear()
+                                                        .domain([0, maxValue])
+                                                        .range([maxHeight, 0]);
+
+                                                    var group = d3.select("#mainvisualization").append("g")
+                                                        .attr("transform", "translate(100, 100)");
+
+                                                    if (document.getElementById("compareCountry").checked != true) 
+													{
+                                                        d3.select("#textlabel")
+                                                            .html(placeName + " : " + resourceSelected);
+
+                                                        group.selectAll("rect").data(actualData1).enter().append('rect')
+                                                            .attr("x", function(f, i) 
+															{
+                                                                return i * rectWidth;
+                                                            })
+                                                            .attr("y", function(f, i) 
+															{
+                                                                return yAxis(f);
+                                                            })
+                                                            .attr("width", rectWidth)
+                                                            .attr("height", function(f) 
+															{
+                                                                return maxHeight - yAxis(f);
+                                                            })
+                                                            .style("stroke", "white")
+                                                            .style("fill", "cornflowerblue")
+                                                            .on("mouseover", function(f, i) 
+															{
+                                                                return hoverfunction.style("visibility", "visible").text(f + ": year-" + (i + 1980));
+                                                            })
+                                                            .on("mouseout", function(d) 
+															{
+                                                                return hoverfunction.style("visibility", "hidden");
+                                                            })
+                                                            .on("mousemove", function(f, i) 
+															{
+                                                                return hoverfunction.style("left", (event.pageX + 10) + "px").style("top", (event.pageY - 10) + "px").text(f + ": year-" + (i + 1980));
+                                                            });
+                                                    } 
+													else 
+													{
+                                                        d3.select("#textlabel")
+                                                            .html(placeName + " & " + comparedPlaceName + " : " + resourceSelected);
+
+                                                        actualData2 = readData(comparedPlaceName, resourceSelected);
+
+                                                        for (var i = 0; i < actualData2.length; i++)
+                                                            actualData2[i] = +actualData2[i];
+
+                                                        var maxValue = d3.max(actualData1) > d3.max(actualData2) ? d3.max(actualData1) : d3.max(actualData2);
+
+                                                        var yAxis = d3.scale.linear()
+                                                            .domain([0, maxValue])
+                                                            .range([maxHeight, 0]);
+
+                                                        group.selectAll("rect").data(actualData1).enter().append('rect')
+                                                            .attr("x", function(f, i) 
+															{
+                                                                return i * rectWidth;
+                                                            })
+                                                            .attr("y", function(f, i) 
+															{
+                                                                return yAxis(f);
+                                                            })
+                                                            .attr("width", (rectWidth / 2) - 1)
+                                                            .attr("height", function(f) 
+															{
+                                                                return maxHeight - yAxis(f);
+                                                            })
+                                                            .style("fill", "cornflowerblue")
+                                                            .on("mouseover", function(f, i) 
+															{
+                                                                return hoverfunction.style("visibility", "visible").text(f + ": year-" + (i + 1980));
+                                                            })
+                                                            .on("mouseout", function(f) 
+															{
+                                                                return hoverfunction.style("visibility", "hidden");
+                                                            })
+                                                            .on("mousemove", function(f, i) 
+															{
+                                                                return hoverfunction.style("left", (event.pageX + 10) + "px").style("top", (event.pageY - 10) + "px").text(f + ": year-" + (i + 1980));
+                                                            });
+
+                                                        var group = d3.select("#mainvisualization").append("g")
+                                                            .attr("transform", "translate(" + (100 - rectWidth / 2) + ", 100)");
+
+                                                        group.selectAll("rect").data(actualData2).enter().append('rect')
+                                                            .attr("x", function(f, i) 
+															{
+                                                                return i * rectWidth + 2;
+                                                            })
+                                                            .attr("y", function(f, i) 
+															{
+                                                                return yAxis(f);
+                                                            })
+                                                            .attr("width", (rectWidth / 2 - 2) - 1)
+                                                            .attr("height", function(f) 
+															{
+                                                                return maxHeight - yAxis(f);
+                                                            })
+                                                            .style("fill", "darkorange")
+                                                            .on("mouseover", function(f, i) 
+															{
+                                                                return hoverfunction.style("visibility", "visible").text(f + ": year-" + (i + 1980));
+                                                            })
+                                                            .on("mouseout", function(f) 
+															{
+                                                                return hoverfunction.style("visibility", "hidden");
+                                                            })
+                                                            .on("mousemove", function(f, i) 
+															{
+                                                                return hoverfunction.style("left", (event.pageX + 10) + "px").style("top", (event.pageY - 10) + "px").text(f + ": year-" + (i + 1980));
+                                                            });
+                                                    }
+
+                                                    var hoverfunction = d3.select("body")
+                                                        .append("div")
+                                                        .style("font-family", "arial")
+                                                        .style("position", "absolute")
+                                                        .style("font-size", "18px");
+
+                                                    var minDate = new Date(1980, 01, 01),
+                                                        maxDate = new Date(2012, 01, 01);
+
+                                                    var xAxisScale = d3.time.scale()
+                                                        .domain([minDate, maxDate])
+                                                        .range([0, maxWidth]);
+
+                                                    var xAxis = d3.svg.axis()
+                                                        .scale(xAxisScale);
+
+                                                    group.append("g")
+                                                        .attr('transform', 'translate(0,' + maxHeight + ')')
+                                                        .attr('class', 'axis')
+                                                        .call(xAxis);
+
+                                                    var yScale = d3.svg.axis()
+                                                        .scale(yAxis)
+                                                        .orient('left');
+
+                                                    group.append("g")
+                                                        .attr('transform', 'translate(-2,0)')
+                                                        .attr('class', 'axis')
+                                                        .call(yScale);
+                                                }
+
+                                                /* Stacked Area Chart */
+
+                                                if (visualizationType == "AreaGraph") 
+												{
+                                                    d3.select("#mainvisualization").selectAll('g').remove();
+
+                                                    var maxWidth = 891,
+                                                        maxHeight = 450,
+                                                        rectWidth = 27;
+
+                                                    var yAxis = d3.scale.linear()
+                                                        .domain([0, d3.max(actualData1)])
+                                                        .range([maxHeight, 0]);
+
+                                                    var yy = d3.scale.linear().range([maxHeight, 0]);
+
+                                                    var group = d3.select("#mainvisualization").append("g")
+                                                        .attr("transform", "translate(100, 100)");
+
+                                                    if (document.getElementById("compareCountry").checked != true)
+													{
+                                                        d3.select("#textlabel")
+                                                            .html(placeName + " : " + resourceSelected);
+
+                                                        var area = d3.svg.area()
+                                                            .y0(maxHeight)
+                                                            .y1(function(f, i) 
+															{
+                                                                return yAxis(f);
+                                                            })
+                                                            .x(function(f, i) 
+															{
+                                                                return i * rectWidth;
+                                                            });
+
+                                                        var line = d3.svg.line()
+                                                            .y(function(f) 
+															{
+                                                                return yy(f);
+                                                            })
+                                                            .x(function(f, i) 
+															{
+                                                                return i * rectWidth;
+                                                            });
+
+                                                        var path = group.append("path")
+                                                            .attr("class", "area")
+                                                            .attr("d", area(actualData1))
+                                                            .style("fill", "cornflowerblue")
+                                                            .on("mouseover", function(f, i) 
+															{
+                                                                return hoverfunction.style("visibility", "visible").text(placeName);
+                                                            })
+                                                            .on("mouseout", function(f) 
+															{
+                                                                return hoverfunction.style("visibility", "hidden");
+                                                            })
+                                                            .on("mousemove", function(f, i) 
+															{
+                                                                return hoverfunction.style("left", (event.pageX + 10) + "px").style("top", (event.pageY - 10) + "px").text(placeName);
+                                                            });
+                                                    } 
+													else 
+													{
+                                                        d3.select("#textlabel")
+                                                            .html(placeName + " & " + comparedPlaceName + " : " + resourceSelected);
+
+                                                        actualData2 = readData(comparedPlaceName, resourceSelected);
+
+                                                        for (var i = 0; i < actualData2.length; i++)
+                                                            actualData2[i] = +actualData2[i];
+
+                                                        maxValue = d3.max(actualData1) > d3.max(actualData2) ? d3.max(actualData1) : d3.max(actualData2);
+
+                                                        var yAxis = d3.scale.linear()
+                                                            .domain([0, maxValue])
+                                                            .range([maxHeight, 0]);
+
+                                                        var area = d3.svg.area()
+                                                            .y0(maxHeight)
+                                                            .y1(function(f, i) 
+															{
+                                                                return yAxis(f);
+                                                            })
+                                                            .x(function(f, i) 
+															{
+                                                                return i * rectWidth;
+                                                            });
+
+                                                        var line = d3.svg.line()
+                                                            .y(function(f) 
+															{
+                                                                return yy(f);
+                                                            })
+                                                            .x(function(f, i) 
+															{
+                                                                return i * rectWidth;
+                                                            });
+
+                                                        var path = group.append("path")
+                                                            .attr("class", "area")
+                                                            .attr("d", area(actualData1))
+                                                            .style("fill", "cornflowerblue")
+                                                            .on("mouseover", function(f, i) 
+															{
+                                                                //console.log(f);
+                                                                return hoverfunction.style("visibility", "visible").text(placeName);
+                                                            })
+                                                            .on("mouseout", function(f) 
+															{
+                                                                return hoverfunction.style("visibility", "hidden");
+                                                            })
+                                                            .on("mousemove", function(f, i) 
+															{
+                                                                return hoverfunction.style("left", (event.pageX + 10) + "px").style("top", (event.pageY - 10) + "px").text(placeName);
+                                                            });
+
+                                                        var path = group.append("path")
+                                                            .attr("class", "area")
+                                                            .attr("d", area(actualData2))
+                                                            .style("fill", "darkorange")
+                                                            .on("mouseover", function(f, i) 
+															{
+                                                                return hoverfunction.style("visibility", "visible").text(placeName);
+                                                            })
+                                                            .on("mouseout", function(f) 
+															{
+                                                                return hoverfunction.style("visibility", "hidden");
+                                                            })
+                                                            .on("mousemove", function(f, i) 
+															{
+                                                                return hoverfunction.style("left", (event.pageX + 10) + "px").style("top", (event.pageY - 10) + "px").text(placeName);
+                                                            });
+                                                    }
+
+                                                    var hoverfunction = d3.select("body")
+                                                        .append("div")
+                                                        .style("font-family", "arial")
+                                                        .style("position", "absolute")
+                                                        .style("font-size", "18px");
+
+                                                    var minDate = new Date(1980, 01, 01),
+                                                        maxDate = new Date(2012, 01, 01);
+
+                                                    var xAxisScale = d3.time.scale()
+                                                        .domain([minDate, maxDate])
+                                                        .range([0, maxWidth]);
+
+                                                    var xAxis = d3.svg.axis()
+                                                        .scale(xAxisScale);
+
+                                                    group.append("g")
+                                                        .attr('transform', 'translate(0,' + maxHeight + ')')
+                                                        .attr('class', 'axis')
+                                                        .call(xAxis);
+
+                                                    var yScale = d3.svg.axis()
+                                                        .scale(yAxis)
+                                                        .orient('left');
+
+                                                    group.append("g")
+                                                        .attr('transform', 'translate(-2,0)')
+                                                        .attr('class', 'axis')
+                                                        .call(yScale);
+                                                }
+
+                                                /* Line Chart */
+
+                                                if (visualizationType == "LineGraph") 
+												{
+                                                    d3.select("#mainvisualization").selectAll('g').remove();
+
+                                                    var maxWidth = 891,
+                                                        maxHeight = 450,
+                                                        rectWidth = 27;
+
+                                                    var yAxis = d3.scale.linear()
+                                                        .domain([0, d3.max(actualData1)])
+                                                        .range([maxHeight, 0]);
+
+                                                    var group = d3.select("#mainvisualization").append("g")
+                                                        .attr("transform", "translate(100, 100)");
+
+                                                    if (document.getElementById("compareCountry").checked != true) 
+													{
+                                                        d3.select("#textlabel")
+                                                            .html(placeName + " : " + resourceSelected);
+
+                                                        var line = d3.svg.line()
+                                                            .y(function(f) 
+															{
+                                                                return yAxis(f);
+                                                            })
+                                                            .x(function(f, i)
+															{
+                                                                return i * rectWidth;
+                                                            });
+
+                                                        var path = group.append("path")
+                                                            .attr("d", line(actualData1))
+                                                            .attr("class", "line")
+                                                            .style("stroke", "cornflowerblue")
+                                                            .style("fill", "none")
+                                                            .style("stroke-width", 3)
+                                                            .on("mouseover", function(f, i) 
+															{
+                                                                return hoverfunction.style("visibility", "visible").text(placeName);
+                                                            })
+                                                            .on("mouseout", function(f) 
+															{
+                                                                return hoverfunction.style("visibility", "hidden");
+                                                            })
+                                                            .on("mousemove", function(f, i) 
+															{
+                                                                return hoverfunction.style("left", (event.pageX + 10) + "px").style("top", (event.pageY - 10) + "px").text(placeName);
+                                                            });
+                                                    } 
+													else 
+													{
+                                                        d3.select("#textlabel")
+                                                            .html(placeName + " & " + comparedPlaceName + " : " + resourceSelected);
+
+                                                        actualData2 = readData(comparedPlaceName, resourceSelected);
+
+                                                        for (var i = 0; i < actualData2.length; i++)
+                                                            actualData2[i] = +actualData2[i];
+
+                                                        maxValue = d3.max(actualData1) > d3.max(actualData2) ? d3.max(actualData1) : d3.max(actualData2);
+
+                                                        var yAxis = d3.scale.linear()
+                                                            .domain([0, maxValue])
+                                                            .range([maxHeight, 0]);
+
+                                                        var line = d3.svg.line()
+                                                            .y(function(f) 
+															{
+                                                                return yAxis(f);
+                                                            })
+                                                            .x(function(f, i) 
+															{
+                                                                return i * rectWidth;
+                                                            });
+
+                                                        var path = group.append("path")
+                                                            .attr("d", line(actualData1))
+                                                            .attr("class", "line")
+                                                            .style("stroke", "cornflowerblue")
+                                                            .style("fill", "none")
+                                                            .style("stroke-width", 2)
+                                                            .on("mouseover", function(f, i)
+															{
+                                                                return hoverfunction.style("visibility", "visible").text(placeName);
+                                                            })
+                                                            .on("mousemove", function(f, i) 
+															{
+                                                                return hoverfunction.style("top", (event.pageY - 10) + "px").style("left", (event.pageX + 10) + "px").text(placeName);
+                                                            })
+                                                            .on("mouseout", function(f) 
+															{
+                                                                return hoverfunction.style("visibility", "hidden");
+                                                            });
+
+                                                        var length = path.node().getTotalLength();
+
+                                                        path.attr("stroke-dasharray", length + " " + length)
+                                                            .attr("stroke-dashoffset", length)
+                                                            .transition()
+                                                            .ease("linear")
+                                                            .duration(2500)
+                                                            .attr("stroke-dashoffset", 0);
+
+                                                        var path = group.append("path")
+                                                            .attr("d", line(actualData2))
+                                                            .attr("class", "line")
+                                                            .style("stroke", "darkorange")
+                                                            .style("fill", "none")
+                                                            .style("stroke-width", 2)
+                                                            .on("mouseover", function(f, i) 
+															{
+                                                                return hoverfunction.style("visibility", "visible").text(placeName);
+                                                            })
+                                                            .on("mousemove", function(f, i) 
+															{
+                                                                return hoverfunction.style("top", (event.pageY - 10) + "px").style("left", (event.pageX + 10) + "px").text(placeName);
+                                                            })
+                                                            .on("mouseout", function(f) 
+															{
+                                                                return hoverfunction.style("visibility", "hidden");
+                                                            });
+
+                                                    }
+
+                                                    var length = path.node().getTotalLength();
+
+                                                    path.attr("stroke-dasharray", length + " " + length)
+                                                        .attr("stroke-dashoffset", length)
+                                                        .transition()
+                                                        .ease("linear")
+                                                        .duration(2500)
+                                                        .attr("stroke-dashoffset", 0);
+
+                                                    var hoverfunction = d3.select("body")
+                                                        .append("div")
+                                                        .style("font-family", "arial")
+                                                        .style("position", "absolute")
+                                                        .style("font-size", "18px");
+
+                                                    var minDate = new Date(1980, 01, 01),
+                                                        maxDate = new Date(2012, 01, 01);
+
+                                                    var xAxisScale = d3.time.scale()
+                                                        .domain([minDate, maxDate])
+                                                        .range([0, maxWidth]);
+
+                                                    var xAxis = d3.svg.axis()
+                                                        .scale(xAxisScale);
+
+                                                    group.append("g")
+                                                        .attr('transform', 'translate(0,' + maxHeight + ')')
+                                                        .attr('class', 'axis')
+                                                        .call(xAxis);
+
+                                                    var yScale = d3.svg.axis()
+                                                        .orient('left')
+                                                        .scale(yAxis);
+
+                                                    group.append("g")
+                                                        .attr('transform', 'translate(-2,0)')
+                                                        .attr('class', 'axis')
+                                                        .call(yScale);
+                                                }
+
+                                                
+                                            }
+
+                                        });
+                                    });
+                                });
+                            });
+                        });
+                    });
+                });
+            });
+        });
+    });
+});
+	</script>
+</body>
+</html>
